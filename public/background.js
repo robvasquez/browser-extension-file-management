@@ -98,45 +98,26 @@ function sendMessageToPopup(message) {
   }
 }
 
-chrome.webRequest.onBeforeRequest.addListener(
-  function (details) {
-    if (details.method === "POST" && details.requestBody) {
-      let fileName = null;
-      if (details.requestBody.formData) {
-        for (let key in details.requestBody.formData) {
-          if (details.requestBody.formData[key] instanceof File) {
-            fileName = details.requestBody.formData[key].name;
-            break;
-          }
-        }
-      } else if (details.requestBody.raw) {
-        fileName = "Unknown file (raw data)";
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: [1],
+    addRules: [
+      {
+        id: 1,
+        priority: 1,
+        action: { type: 'block' },
+        condition: { urlFilter: 'example.com', resourceTypes: ['main_frame'] }
       }
-
-      if (fileName) {
-        console.log("File detected for upload:", fileName);
-        chrome.runtime.sendMessage({
-          type: "FILE_UPLOAD",
-          fileName: fileName
-        });
-
-        // Open the popup
-        chrome.action.openPopup();
-      }
-    }
-    return { cancel: false };
-  },
-  { urls: ["<all_urls>"] },
-  ["requestBody"]
-);
+    ]
+  });
+});
 
 chrome.runtime.onMessage.addListener(
-  function (request, sender, sendResponse) {
-    if (request.action === "uploadToIManage") {
-      console.log("Uploading to iManage...");
-      // Here you would add the logic to upload to iManage
-      sendResponse({ status: "success" });
+    function (request, sender, sendResponse) {
+      if (request.action === "uploadToIManage") {
+        console.log("Uploading to iManage...");
+        // Here you would add the logic to upload to iManage
+        sendResponse({ status: "success" });
+      }
     }
-  }
 );
-

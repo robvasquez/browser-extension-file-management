@@ -1,5 +1,24 @@
-// content.js
+// contentScript.js
 console.log('Content script loaded');
+
+// Function to zip a file
+function zipFile(file) {
+    return new Promise((resolve, reject) => {
+        console.log('Starting to zip the file:', file.name);
+        const JSZip = require('jszip');
+        const zip = new JSZip();
+        zip.file(file.name, file);
+        zip.generateAsync({ type: 'blob' })
+            .then(function (blob) {
+                console.log('File zipped successfully:', file.name);
+                resolve(blob);
+            })
+            .catch(function (err) {
+                console.error('Error while zipping the file:', err);
+                reject(err);
+            });
+    });
+}
 
 function showDialog() {
     console.log('Showing dialog');
@@ -52,8 +71,7 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     return true;  // Keeps the message channel open for asynchronous responses
 });
 
-//upload 
-
+// File upload interception
 let originalFileInput = null;
 
 function injectDialog() {
@@ -83,21 +101,42 @@ function injectDialog() {
 
 function handleIManageUpload() {
     console.log('iManage button clicked');
+    console.log('****** typeof chrome !== \'undefined\' ', typeof chrome !== 'undefined')
+    console.log('****** chrome.runtime ',  chrome.runtime)
+    console.log('****** chrome.runtime.sendMessage', chrome.runtime.sendMessage)
+    console.log('****** typeof chrome !== \'undefined\' && chrome.runtime && chrome.runtime.sendMessage', typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage ? 'true' : false)
     if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
-        chrome.runtime.sendMessage({ action: "uploadToIManage" }, function (response) {
-            if (chrome.runtime.lastError) {
-                console.error("Error:", chrome.runtime.lastError.message);
-                alert('Error uploading to iManage: ' + chrome.runtime.lastError.message);
-            } else {
-                console.log("Response from background:", response);
-                alert('Uploading to iManage');
-            }
-        });
-    } else {
-        console.warn('chrome.runtime.sendMessage is not available');
-        alert('Uploading to iManage (fallback)');
+        if (originalFileInput && originalFileInput.files.length > 0) {
+            const file = originalFileInput.files[0];
+            console.log('File selected for upload:', file.name);
+            zipFile(file).then(zippedFile => {
+                console.log('Zipped file ready for upload:', zippedFile);
+                // Upload the zipped file
+                const formData = new FormData();
+                formData.append('file', zippedFile, `${file.name}.zip`);
+                console.log('Uploading zipped file to server...');
+                fetch('your-upload-url', {
+                    method: 'POST',
+                    body: formData
+                }).then(response => {
+                    if (response.ok) {
+                        console.log('File uploaded successfully');
+                        alert('File uploaded successfully');
+                    } else {
+                        console.error('File upload failed', response.statusText);
+                        alert('File upload failed');
+                    }
+                }).catch(error => {
+                    console.error('Upload error:', error);
+                    alert('File upload failed');
+                });
+            }).catch(error => {
+                console.error('Zipping error:', error);
+                alert('Zipping failed');
+            });
+        }
+        document.getElementById('custom-file-picker-dialog').remove();
     }
-    document.getElementById('custom-file-picker-dialog').remove();
 }
 
 function handleContinueFilePicker() {
@@ -121,11 +160,11 @@ function handleContinueFilePicker() {
     }
 }
 
-
 function handleFileInputClick(event) {
     if (event.target.type === 'file') {
         event.preventDefault();
         originalFileInput = event.target;
+        console.log('File input clicked:', originalFileInput);
         injectDialog();
     }
 }
